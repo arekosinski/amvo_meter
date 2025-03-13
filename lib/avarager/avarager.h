@@ -4,6 +4,7 @@ class Avareager {
         float* data_array;
         int data_size;
         int data_current_index = 0;
+        int data_all_indexes = 0;
         bool overrun = false;
         float current_max_value = __FLT_MIN__;
         float current_min_value = __FLT_MAX__;
@@ -11,26 +12,33 @@ class Avareager {
         void data_index_up() {
             if (data_current_index + 1 == data_size) {
                 data_current_index = 0;
+                data_all_indexes++;
                 overrun = true;
             } else {
                 data_current_index++;
             };
         }
-
+        
         void data_index_down() {
             if (data_current_index > 0 ) {
                data_current_index--;
             };
         }
 
-        float setMaxValue(float value) {
-            if ( value > current_max_value) {
-                current_max_value = value;                
+        float setMaxValue(float value) { // @TODO refactor this function for currenlt hold data series
+            current_max_value = __FLT_MIN__;
+            for ( int i = 0 ; i < getCurrentSize(); i++ ) {
+                if ( getValueByIndex(i) > current_max_value ) {
+                    current_max_value = getValueByIndex(i);
+                };
             };
+            // if ( value > current_max_value) {
+            //     current_max_value = value;                
+            // };
             return current_max_value;
         }
 
-        float setMinValue(float value) {
+        float setMinValue(float value) { // @TODO refactor this function for currenlt hold data series
             if ( value < current_min_value) {
                 current_min_value = value;                
             };
@@ -48,11 +56,13 @@ class Avareager {
             delete[] data_array;
         }
 
-        void push(float new_value) {
+        int push(float new_value) {
+            int data_current_index_tmp = data_current_index; 
             data_array[data_current_index] = new_value;
             data_index_up();
-            setMaxValue(new_value);
+            // setMaxValue(new_value);
             setMinValue(new_value);
+            return data_current_index_tmp;
         }
 
         float getValueByIndex(const int ind) {
@@ -93,6 +103,12 @@ class Avareager {
         }
 
         float getMaxValue() {
+            current_max_value = __FLT_MIN__;
+            for ( int i = 0 ; i < getCurrentSize(); i++ ) {
+                if ( getValueByIndex(i) > current_max_value ) {
+                    current_max_value = getValueByIndex(i);
+                };
+            };
             return current_max_value;
         }
 

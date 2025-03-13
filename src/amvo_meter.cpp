@@ -1,10 +1,24 @@
 #include <Arduino.h>
 #include "Wire.h"
 #include "INA226.h"
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 #include "avarager.h"
 
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 32 // OLED display height, in pixels
+
+// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
+#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+#define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+GFXcanvas1 canvas_text(64,32); // 16-bit, 120x30 pixels
+GFXcanvas1 canvas_graph(64,32); // 16-bit, 120x30 pixels
 
 INA226 INA(0x40);
+
+Avareager current_series(60);
 
 void setup() {
 
@@ -33,7 +47,17 @@ void setup() {
     Serial.print(INA.getMaxCurrent(), 3);
     Serial.println(" A");
 
-    Serial.println("BUS\tSHUNT\tCURRENT\tPOWER\tPOWER2\tDELTA\tMAX_BUS_V\tMAX_SHT_V\tMAX_CURRENT\tMAX_POWER");
+    delay(1000); // this time is needed to establish startup time after power up - escpecially if initialization would be in first lines of setup procedure 
+    if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+      Serial.println(F("SSD1306 allocation failed"));
+      for(;;); // Don't proceed, loop forever
+    } else {
+      Serial.println("Screen found");
+    };
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.clearDisplay();
+    display.display();
 
 }
 
@@ -44,11 +68,28 @@ void set_max_value(float reference, float *current_max) {
     return;
 }
 
+int get_autoscale_max_value_graph(int current) {
+
+    if ( current < 1 ) {
+        return 1;
+    } else if ( current < 10 ) {
+        return 10; 
+    } else if (current < 30 ) {
+        return 30;
+    } else if ( current < 50 ) {
+        return 50;
+    } else if ( current < 100 ) {
+        return 100;
+    };
+
+    return 300;
+}
+
 float max_voltage_bus = 0; // in V
 float max_voltage_shunt = 0; // in mV
 float max_current = 0; // in mA
 float max_power = 0; // in mW
-
+int graph_max_miliamps_scale = 30;
 
 void loop() {
     
@@ -56,7 +97,10 @@ void loop() {
     float voltage_bus = INA.getBusVoltage();
     float voltage_shunt = INA.getShuntVoltage_mV();
     float current_ma = INA.getCurrent_mA();
+    float current_ua = INA.getCurrent_uA();
     float power_mw = INA.getPower_mW();
+
+    int current_index_in_graph = current_series.push(current_ma);
   
     set_max_value(voltage_shunt,&max_voltage_shunt);
     set_max_value(current_ma,&max_current);
@@ -64,28 +108,73 @@ void loop() {
     set_max_value(voltage_bus,&max_voltage_bus);
 
     snprintf(line,299,"Bus: %2.3f V | Shunt: % 2.3f V  | Current: % 3.3f mA | Power: %03.2f mW | M_Bus: %2.3f V | M_Shunt: %2.3fV | M_Curernt: %3.2f mA",voltage_bus,voltage_shunt,current_ma,power_mw,max_voltage_bus,max_voltage_shunt,max_current);
-    Serial.println(line);
 
-    // Serial.print(voltage_bus, 3);
-    // Serial.print("\t");
-    // Serial.print(voltage_shunt, 3);
-    // Serial.print("\t");
-    // Serial.print(current_ma, 3);
-    // Serial.print("\t");
-    // Serial.print(power_mw, 3);
-    // Serial.print("\t");
-    // Serial.print(voltage_bus * current_ma, 3);
-    // Serial.print("\t");
-    // Serial.print((power_mw - voltage_bus * current_ma), 3);
-    // Serial.print("\t");
-    // Serial.print(max_voltage_bus);
-    // Serial.print("\t");
-    // Serial.print(max_voltage_shunt);
-    // Serial.print("\t");
-    // Serial.print(max_current);
-    // Serial.print("\t");
-    // Serial.print(max_power);
-    // Serial.println();
+
+    // prepare text to show in display
+
+    canvas_text.fillScreen(SSD1306_BLACK);
+    canvas_text.setTextSize(1);
+    canvas_text.setTextColor(SSD1306_WHITE);
+
+    // prepare line to print about current
+    line[0] = '\0';
+    if ( current_ma < 0 ) {
+        snprintf(line, 9, "A: -0 m");
+    } else if ( current_ma > 1 ) {
+        snprintf(line, 12, "A:%-3.3fm", current_ma);
+    } else {
+        snprintf(line, 12, "A:%03.3fu", current_ua);
+    };
+    canvas_text.setCursor(0,0);
+    canvas_text.print(line);
+    
+    // prepare line to print about max current
+    line[0] = '\0';
+    if ( max_current < 0 ) {
+        snprintf(line, 9, "MA: -0 m");
+    } else {
+        snprintf(line, 12, "MA:%03.1fm", current_series.getMaxValue());
+    };
+    canvas_text.setCursor(0,8);
+    canvas_text.print(line);
+
+
+    // prepare line to print about avg current
+    line[0] = '\0';
+    if ( current_series.getAvarage() < 0 ) {
+        snprintf(line, 12, "AA: -0 m");
+    } else {
+        snprintf(line, 12, "AA:%03.1fm", current_series.getAvarage());
+    };
+    canvas_text.setCursor(0,16);
+    canvas_text.print(line);
+
+    // prepare line to print about voltage bus
+    line[0] = '\0';
+    if ( voltage_bus < 0 ) {
+        snprintf(line, 12, "VB: -0 V");
+    } else {
+        snprintf(line, 12, "Vb:%02.2fV", voltage_bus);
+    };
+    canvas_text.setCursor(0,24);
+    canvas_text.print(line);
+
+    // prepare graph data to show in display
+    // simplified autoscale of the graph
+    graph_max_miliamps_scale = get_autoscale_max_value_graph(current_series.getMaxValue());
+
+    canvas_graph.drawFastVLine(current_index_in_graph,0,SCREEN_HEIGHT,SSD1306_BLACK);
+    int scale_ma_into_pixel_position_y = SCREEN_HEIGHT - ceil(current_ma/graph_max_miliamps_scale*SCREEN_HEIGHT);
+    if (scale_ma_into_pixel_position_y < 0 ) { // why? because we assume that we can measure more than we're scaling the graph
+        scale_ma_into_pixel_position_y = 0; 
+    };
+    canvas_graph.drawPixel(current_index_in_graph, scale_ma_into_pixel_position_y, SSD1306_WHITE);
+
+    // rewrite buffers to screen
+    display.drawBitmap(64, 0, canvas_text.getBuffer(), canvas_text.width(),canvas_text.height(), SSD1306_WHITE, SSD1306_BLACK);
+    display.drawBitmap(0, 0, canvas_graph.getBuffer(), canvas_graph.width(),canvas_graph.height(), SSD1306_WHITE, SSD1306_BLACK);
+    display.display();
+    
     delay(200);
 }
 
