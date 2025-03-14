@@ -25,21 +25,6 @@ class DataSeries {
             };
         }
 
-        float setMaxValue(float value) { 
-            if ( value > series_max_value) {
-                series_max_value = value;                
-            };
-            return series_max_value;
-        }
-
-        float setMinValue(float value) {
-            if ( value < series_min_value) {
-                series_min_value = value;                
-            };
-            return series_min_value;
-        }
-
-
     public:
         DataSeries(int size) {
             data_array = new float[size];
@@ -54,8 +39,6 @@ class DataSeries {
             int data_current_index_tmp = data_current_index; 
             data_array[data_current_index] = new_value;
             data_index_up();
-            // setMaxValue(new_value);
-            setMinValue(new_value);
             return data_current_index_tmp;
         }
 
@@ -76,15 +59,10 @@ class DataSeries {
         }
 
         float getSum() {
-            int size_to_calculate = 0;
-        
-            size_to_calculate = getCurrentSize();
-
             float sum_of_values = 0;
-
-            for( int ind = 0 ; ind < size_to_calculate; ind++) {
-                sum_of_values = sum_of_values + getValueByIndex(ind);
-            };
+            for (int ind = 0; ind < getCurrentSize(); ind++) {
+                sum_of_values += getValueByIndex(ind);
+            }
             return sum_of_values;
         }
 
@@ -106,7 +84,7 @@ class DataSeries {
             return series_max_value;
         }
 
-        float getMinValue() {
+        float getMin() {
             series_min_value = __FLT_MAX__;
             for ( int i = 0 ; i < getCurrentSize(); i++ ) {
                 if ( getValueByIndex(i) < series_min_value ) {
