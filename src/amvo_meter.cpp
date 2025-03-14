@@ -16,7 +16,13 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 GFXcanvas1 canvas_text(64,32); // 16-bit, 120x30 pixels
 GFXcanvas1 canvas_graph(64,32); // 16-bit, 120x30 pixels
 
+// specific for INA226 and board - to determin during calibration process
+#define INA_SHUNT 0.1  /* shunt (Shunt Resistance in Ohms). Lower shunt gives higher accuracy but lower current measurement range. Recommended value 0.020 Ohm. Min 0.001 Ohm */
+#define INA_CURRENT_LSB_MA 0.025 /* current_LSB_mA (Current Least Significant Bit in milli Amperes). Recommended values: 0.050, 0.100, 0.250, 0.500, 1, 2, 2.5 (in milli Ampere units) */
+#define INA_CURRENT_ZERO_OFFSET_MA -0.025 /* current_zero_offset_mA (Current Zero Offset in milli Amperes, default = 0) */
+#define INA_BUS_V_SCALING_E4 10004 /* bus_V_scaling_e4 (Bus Voltage Scaling Factor, default = 10000) */
 INA226 INA(0x40);
+
 
 DataSeries data_series_current(60);
 DataSeries data_series_voltage_bus(60);
@@ -34,13 +40,8 @@ void setup() {
         Serial.println("could not connect. Fix and Reboot");
     };
 
-    float ina_shunt = 0.1;                      /* shunt (Shunt Resistance in Ohms). Lower shunt gives higher accuracy but lower current measurement range. Recommended value 0.020 Ohm. Min 0.001 Ohm */
-    float ina_current_LSB_mA = 0.025;              /* current_LSB_mA (Current Least Significant Bit in milli Amperes). Recommended values: 0.050, 0.100, 0.250, 0.500, 1, 2, 2.5 (in milli Ampere units) */
-    float ina_current_zero_offset_mA = -0.025 ;         /* current_zero_offset_mA (Current Zero Offset in milli Amperes, default = 0) */
-    uint16_t ina_bus_V_scaling_e4 = 10004;        /* bus_V_scaling_e4 (Bus Voltage Scaling Factor, default = 10000) */
-  
-    INA.configure(ina_shunt, ina_current_LSB_mA, ina_current_zero_offset_mA, ina_bus_V_scaling_e4);
-    INA.setMaxCurrentShunt(1, ina_shunt);
+    INA.configure(INA_SHUNT, INA_CURRENT_LSB_MA, INA_CURRENT_ZERO_OFFSET_MA, INA_BUS_V_SCALING_E4);
+    INA.setMaxCurrentShunt(1, INA_SHUNT);
     INA.setAverage(INA226_4_SAMPLES);
     INA.setBusVoltageConversionTime(INA226_1100_us);
     INA.setShuntVoltageConversionTime(INA226_1100_us);
