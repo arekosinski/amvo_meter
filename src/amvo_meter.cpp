@@ -3,7 +3,7 @@
 #include "INA226.h"
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include "avarager.h"
+#include "dataseries.h"
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 32 // OLED display height, in pixels
@@ -18,7 +18,9 @@ GFXcanvas1 canvas_graph(64,32); // 16-bit, 120x30 pixels
 
 INA226 INA(0x40);
 
-Avareager current_series(60);
+DataSeries data_series_current(60);
+DataSeries data_series_voltage_bus(60);
+
 
 void setup() {
 
@@ -30,7 +32,7 @@ void setup() {
     if (!INA.begin() )
     {
         Serial.println("could not connect. Fix and Reboot");
-    }
+    };
 
     float ina_shunt = 0.1;                      /* shunt (Shunt Resistance in Ohms). Lower shunt gives higher accuracy but lower current measurement range. Recommended value 0.020 Ohm. Min 0.001 Ohm */
     float ina_current_LSB_mA = 0.025;              /* current_LSB_mA (Current Least Significant Bit in milli Amperes). Recommended values: 0.050, 0.100, 0.250, 0.500, 1, 2, 2.5 (in milli Ampere units) */
@@ -85,33 +87,24 @@ int get_autoscale_max_value_graph(int current) {
     return 300;
 }
 
-float max_voltage_bus = 0; // in V
-float max_voltage_shunt = 0; // in mV
-float max_current = 0; // in mA
-float max_power = 0; // in mW
 int graph_max_miliamps_scale = 30;
 
 void loop() {
     
-    char line[300];
+    char line[300] = {0};
     float voltage_bus = INA.getBusVoltage();
     float voltage_shunt = INA.getShuntVoltage_mV();
     float current_ma = INA.getCurrent_mA();
     float current_ua = INA.getCurrent_uA();
     float power_mw = INA.getPower_mW();
 
-    int current_index_in_graph = current_series.push(current_ma);
+    int current_index_in_graph = data_series_current.push(current_ma);
+
+    snprintf(line,299,"Bus: %2.3f V | Shunt: % 2.3f V  | Current: % 3.3f mA | Power: %03.2f mW | M_Bus: %2.3f V | M_Curernt: %3.2f mA",voltage_bus,voltage_shunt,current_ma,power_mw,data_series_voltage_bus.getMax(),data_series_current.getMax());
+    Serial.println(line);
+
   
-    set_max_value(voltage_shunt,&max_voltage_shunt);
-    set_max_value(current_ma,&max_current);
-    set_max_value(power_mw,&max_power);
-    set_max_value(voltage_bus,&max_voltage_bus);
-
-    snprintf(line,299,"Bus: %2.3f V | Shunt: % 2.3f V  | Current: % 3.3f mA | Power: %03.2f mW | M_Bus: %2.3f V | M_Shunt: %2.3fV | M_Curernt: %3.2f mA",voltage_bus,voltage_shunt,current_ma,power_mw,max_voltage_bus,max_voltage_shunt,max_current);
-
-
     // prepare text to show in display
-
     canvas_text.fillScreen(SSD1306_BLACK);
     canvas_text.setTextSize(1);
     canvas_text.setTextColor(SSD1306_WHITE);
@@ -121,7 +114,7 @@ void loop() {
     if ( current_ma < 0 ) {
         snprintf(line, 9, "A: -0 m");
     } else if ( current_ma > 1 ) {
-        snprintf(line, 12, "A:%-3.3fm", current_ma);
+        snprintf(line, 12, "A:%03.3fm", current_ma);
     } else {
         snprintf(line, 12, "A:%03.3fu", current_ua);
     };
@@ -130,38 +123,26 @@ void loop() {
     
     // prepare line to print about max current
     line[0] = '\0';
-    if ( max_current < 0 ) {
-        snprintf(line, 9, "MA: -0 m");
-    } else {
-        snprintf(line, 12, "MA:%03.1fm", current_series.getMaxValue());
-    };
+    snprintf(line, 12, "MA:%03.1fm", data_series_current.getMax());
     canvas_text.setCursor(0,8);
     canvas_text.print(line);
 
 
     // prepare line to print about avg current
     line[0] = '\0';
-    if ( current_series.getAvarage() < 0 ) {
-        snprintf(line, 12, "AA: -0 m");
-    } else {
-        snprintf(line, 12, "AA:%03.1fm", current_series.getAvarage());
-    };
+    snprintf(line, 12, "AA:%03.1fm", data_series_current.getAvarage());
     canvas_text.setCursor(0,16);
     canvas_text.print(line);
 
     // prepare line to print about voltage bus
     line[0] = '\0';
-    if ( voltage_bus < 0 ) {
-        snprintf(line, 12, "VB: -0 V");
-    } else {
-        snprintf(line, 12, "Vb:%02.2fV", voltage_bus);
-    };
+    snprintf(line, 12, "Vb:%-2.2fV", voltage_bus);
     canvas_text.setCursor(0,24);
     canvas_text.print(line);
 
     // prepare graph data to show in display
     // simplified autoscale of the graph
-    graph_max_miliamps_scale = get_autoscale_max_value_graph(current_series.getMaxValue());
+    graph_max_miliamps_scale = get_autoscale_max_value_graph(data_series_current.getMax());
 
     canvas_graph.drawFastVLine(current_index_in_graph,0,SCREEN_HEIGHT,SSD1306_BLACK);
     int scale_ma_into_pixel_position_y = SCREEN_HEIGHT - ceil(current_ma/graph_max_miliamps_scale*SCREEN_HEIGHT);

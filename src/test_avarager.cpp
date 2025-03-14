@@ -1,8 +1,8 @@
 #include <Arduino.h>
-#include "avarager.h"
+#include "dataseries.h"
 
 
-Avareager t1(5);
+DataSeries t1(5);
 
 
 void print_values() {
@@ -19,7 +19,7 @@ void print_values() {
     Serial.println(t1.getSum());
 
     Serial.print("T1 Max: ");
-    Serial.println(t1.getMaxValue());
+    Serial.println(t1.getMax());
 
     Serial.print("T1 Min: ");
     Serial.println(t1.getMinValue());
